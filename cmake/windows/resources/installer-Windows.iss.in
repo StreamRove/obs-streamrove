@@ -1,0 +1,117 @@
+﻿; Inno Setup script for ${PLUGIN_DISPLAY_NAME}.
+;
+; CMake turns this into build_x64/installer-Windows.generated.iss and
+; .github/scripts/Package-Windows.ps1 compiles it with ISCC. Edit this file,
+; never the generated copy.
+;
+; The plugin installs into the per-user OBS plugin directory. That is the same
+; layout CMake installs and the same one the .zip carries, so the installer
+; needs no administrator rights and leaves the OBS installation untouched.
+
+#define PluginId "${PROJECT_NAME}"
+#define PluginName "${PLUGIN_DISPLAY_NAME}"
+#define PluginVersion "${PLUGIN_VERSION}"
+#define PluginPublisher "${PLUGIN_AUTHOR}"
+#define PluginUrl "${PLUGIN_WEBSITE}"
+
+; Both are absolute paths handed over by Package-Windows.ps1.
+#ifndef PackageDir
+  #define PackageDir "."
+#endif
+#ifndef RepoRoot
+  #define RepoRoot "."
+#endif
+
+[Setup]
+; Never change AppId: it is what lets a new version replace an old one.
+AppId={{AE9130DF-77CC-4861-82D5-3D7855306FA7}
+AppName={#PluginName}
+AppVersion={#PluginVersion}
+AppVerName={#PluginName} {#PluginVersion}
+AppPublisher={#PluginPublisher}
+AppPublisherURL={#PluginUrl}
+AppSupportURL={#PluginUrl}
+AppUpdatesURL={#PluginUrl}
+VersionInfoVersion={#PluginVersion}
+VersionInfoProductName={#PluginName}
+
+DefaultDirName={userappdata}\obs-studio\plugins\{#PluginId}
+UninstallDisplayName={#PluginName} {#PluginVersion}
+UninstallFilesDir={app}\uninstall
+
+; No admin prompt, no directory page, no start menu group: the destination is
+; the only one OBS reads, so there is nothing worth asking about.
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
+DisableDirPage=yes
+DisableProgramGroupPage=yes
+DisableWelcomePage=no
+AllowNoIcons=yes
+
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+
+WizardStyle=modern
+Compression=lzma2/max
+SolidCompression=yes
+OutputDir=.
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
+
+[CustomMessages]
+english.ObsRunning=OBS Studio is running. Close it completely, then click Retry.
+turkish.ObsRunning=OBS Studio çalışıyor. Tamamen kapatıp Yeniden Dene'ye basın.
+
+[Messages]
+english.FinishedLabelNoIcons=[name] is installed.%n%nStart OBS Studio, then open the dock from the Docks menu.
+turkish.FinishedLabelNoIcons=[name] kuruldu.%n%nOBS Studio'yu başlatın, ardından Docks menüsünden paneli açın.
+
+[Files]
+Source: "{#PackageDir}\{#PluginId}\bin\64bit\*"; DestDir: "{app}\bin\64bit"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PackageDir}\{#PluginId}\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
+; GPL-2.0-or-later: the licence travels with the binary.
+Source: "{#RepoRoot}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+
+[Code]
+{ A DLL that OBS has loaded cannot be replaced, and Windows would silently
+  defer the write to the next reboot. Better to ask the person to quit OBS. }
+function IsProcessRunning(const ExeName: String): Boolean;
+var
+  Locator, Service, Processes: Variant;
+begin
+  Result := False;
+  try
+    Locator := CreateOleObject('WbemScripting.SWbemLocator');
+    Service := Locator.ConnectServer('', 'root\CIMV2');
+    Processes := Service.ExecQuery('SELECT Name FROM Win32_Process WHERE Name = "' + ExeName + '"');
+    Result := Processes.Count > 0;
+  except
+    { No WMI, no check. Never block the install over a failed probe. }
+    Result := False;
+  end;
+end;
+
+function EnsureObsClosed(): Boolean;
+begin
+  Result := True;
+  while IsProcessRunning('obs64.exe') do
+  begin
+    if MsgBox(CustomMessage('ObsRunning'), mbError, MB_RETRYCANCEL) = IDCANCEL then
+    begin
+      Result := False;
+      Exit;
+    end;
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  Result := EnsureObsClosed();
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  Result := EnsureObsClosed();
+end;

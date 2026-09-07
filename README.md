@@ -25,6 +25,27 @@ e.g. `~/.config/obs-studio/plugin_config/obs-streamrove/settings.json`). The API
 key is stored there as typed, the same way OBS stores stream keys; revoke it
 from the StreamRove dashboard if the machine changes hands.
 
+## Install
+
+Downloads are on the [releases page](https://github.com/StreamRove/obs-streamrove/releases).
+Quit OBS before installing.
+
+**Windows.** Run `obs-streamrove-<version>-windows-x64-Installer.exe`. It installs
+into your own OBS plugin folder, so Windows does not ask for an administrator
+password, and it appears in *Settings → Apps* for removal. The installer is not
+code signed yet, so SmartScreen shows a warning on first run: choose *More info*,
+then *Run anyway*. Prefer to place the files yourself? Take the `.zip` instead and
+extract the `obs-streamrove` folder into `%APPDATA%\obs-studio\plugins\`.
+
+**macOS.** Open `obs-streamrove-<version>-macos-universal.pkg`. It is not notarized
+yet, so Gatekeeper blocks a double click: right-click the file, choose *Open*, then
+*Open* again. The `.tar.xz` is the manual route, with `obs-streamrove.plugin` going
+into `~/Library/Application Support/obs-studio/plugins/`.
+
+**Linux.** Install the `.deb`, or use the build instructions below.
+
+Start OBS afterwards and open the dock from the *Docks* menu.
+
 ## Requirements
 
 * OBS Studio **30.0 or newer** (uses `obs_frontend_add_dock_by_id`).
@@ -79,7 +100,11 @@ Or push a tag and let CI build all three platforms (see *Releasing*).
 1. Set the version in `buildspec.json` (`"version": "0.1.0"`).
 2. Commit, tag exactly that version (`git tag 0.1.0 && git push --tags`).
 3. The `push.yaml` workflow builds Windows, macOS and Ubuntu packages and opens a
-   **draft** GitHub Release with them attached. Review, then publish.
+   **draft** GitHub Release with them attached. Review, then publish. Windows gets
+   both a `.zip` and an Inno Setup installer built from
+   `cmake/windows/resources/installer-Windows.iss.in`; CMake generates the compiled
+   script into the build directory and `Package-Windows.ps1` runs ISCC over it.
+   Building the installer locally needs Inno Setup 6.3 or newer on the machine.
 4. macOS: without the signing secrets the `.pkg` is unsigned and Gatekeeper
    blocks it for users. Add the eight `MACOS_*` repository secrets the template
    documents (Developer ID Application + Installer certificates, notarization

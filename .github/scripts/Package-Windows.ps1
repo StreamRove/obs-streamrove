@@ -53,6 +53,7 @@ function Package {
         ErrorAction = 'SilentlyContinue'
         Path = @(
             "${ProjectRoot}/release/${ProductName}-*-windows-*.zip"
+            "${ProjectRoot}/release/${ProductName}-*-windows-*.exe"
         )
     }
 
@@ -66,6 +67,50 @@ function Package {
         Verbose = ($Env:CI -ne $null)
     }
     Compress-Archive -Force @CompressArgs
+    Log-Group
+
+    Log-Group "Building installer for ${ProductName}..."
+
+    $IsccFile = "${ProjectRoot}/build_${Target}/installer-Windows.generated.iss"
+
+    if ( ! ( Test-Path -Path $IsccFile ) ) {
+        throw "Inno Setup script not found at ${IsccFile}. Run Build-Windows.ps1 first."
+    }
+
+    # The GitHub runner image ships Inno Setup, but not always on PATH.
+    $Iscc = ( Get-Command -Name 'iscc' -ErrorAction SilentlyContinue ).Source
+
+    if ( ! $Iscc ) {
+        $Iscc = @(
+            "${Env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+            "${Env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+        ) | Where-Object { Test-Path -Path $_ } | Select-Object -First 1
+    }
+
+    if ( ! $Iscc ) {
+        throw 'Inno Setup 6 (ISCC.exe) not found. Install it to build the Windows installer.'
+    }
+
+    # Inno reads the payload from a single directory, so the install tree is
+    # staged under a name that does not change with the build configuration.
+    $StageDirectory = "${ProjectRoot}/release/Package"
+
+    Remove-Item -Path $StageDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -Path $StageDirectory -ItemType Directory | Out-Null
+    Copy-Item -Path "${ProjectRoot}/release/${Configuration}/*" -Destination $StageDirectory -Recurse -Force
+
+    $IsccArgs = @(
+        $IsccFile
+        "/DPackageDir=$( ( Resolve-Path -Path $StageDirectory ).Path )"
+        "/DRepoRoot=$( ( Resolve-Path -Path $ProjectRoot ).Path )"
+        "/O$( ( Resolve-Path -Path "${ProjectRoot}/release" ).Path )"
+        "/F${OutputName}-Installer"
+    )
+
+    Invoke-External $Iscc @IsccArgs
+
+    Remove-Item -Path $StageDirectory -Recurse -Force
+
     Log-Group
 }
 
