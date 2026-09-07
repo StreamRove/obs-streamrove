@@ -1,0 +1,19 @@
+{
+    "name": "StreamRove",
+    "more_info_link": "https://streamrove.com/rtmp-streaming",
+    "stream_key_link": "https://streamrove.com/home",
+    "servers": [
+        {
+            "name": "Global (anycast)",
+            "url": "rtmps://live.cloudflare.com:443/live/"
+        }
+    ],
+    "recommended": {
+        "keyint": 2,
+        "max video bitrate": 8000,
+        "max audio bitrate": 160
+    },
+    "supported video codecs": [
+        "h264"
+    ]
+}
