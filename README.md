@@ -39,6 +39,12 @@ yourself? Take the `.zip` instead and extract the `obs-streamrove` folder into
 `C:\ProgramData\obs-studio\plugins\`. Note that this is *not* `%APPDATA%`: on
 Windows, unlike macOS and Linux, OBS does not look in the user profile at all.
 
+*Portable OBS is the exception.* A portable install reads neither of those
+directories, only its own folder, and it wants a different layout. Skip the
+installer, take the `.zip`, and place the two pieces by hand:
+`obs-streamrove.dll` into `<obs folder>\obs-plugins\64bit\`, and the contents of
+`data` into `<obs folder>\data\obs-plugins\obs-streamrove\`.
+
 **macOS.** Open `obs-streamrove-<version>-macos-universal.pkg`. It is not notarized
 yet, so Gatekeeper blocks a double click: right-click the file, choose *Open*, then
 *Open* again. The `.tar.xz` is the manual route, with `obs-streamrove.plugin` going
