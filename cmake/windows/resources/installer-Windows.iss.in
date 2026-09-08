@@ -4,9 +4,18 @@
 ; .github/scripts/Package-Windows.ps1 compiles it with ISCC. Edit this file,
 ; never the generated copy.
 ;
-; The plugin installs into the per-user OBS plugin directory. That is the same
-; layout CMake installs and the same one the .zip carries, so the installer
-; needs no administrator rights and leaves the OBS installation untouched.
+; The destination is the machine-wide OBS plugin directory. On Windows, and
+; only on Windows, OBS reads plugins from GetProgramDataPath (C:\ProgramData),
+; not from the user's own AppData, so there is no per-user option to take:
+;
+;   frontend/widgets/OBSBasic.cpp, AddExtraModulePaths()
+;     #if defined(_WIN32)
+;       GetProgramDataPath(base_module_dir, ..., "obs-studio/plugins/%module%");
+;     #else
+;       GetAppConfigPath(base_module_dir, ..., "obs-studio/plugins/%module%");
+;
+; Writing there needs elevation, so the installer asks for it. The layout below
+; is the one CMake installs and the one the .zip carries.
 
 #define PluginId "${PROJECT_NAME}"
 #define PluginName "${PLUGIN_DISPLAY_NAME}"
@@ -35,14 +44,16 @@ AppUpdatesURL={#PluginUrl}
 VersionInfoVersion={#PluginVersion}
 VersionInfoProductName={#PluginName}
 
-DefaultDirName={userappdata}\obs-studio\plugins\{#PluginId}
+DefaultDirName={commonappdata}\obs-studio\plugins\{#PluginId}
 UninstallDisplayName={#PluginName} {#PluginVersion}
 UninstallFilesDir={app}\uninstall
 
-; No admin prompt, no directory page, no start menu group: the destination is
-; the only one OBS reads, so there is nothing worth asking about.
-PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
+; No directory page and no start menu group: the destination is the only place
+; OBS looks, so there is nothing worth asking about. UsePreviousAppDir has to be
+; off because 0.1.0 installed into AppData, and Inno would otherwise keep
+; reinstalling into that dead location.
+PrivilegesRequired=admin
+UsePreviousAppDir=no
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 DisableWelcomePage=no
@@ -67,6 +78,10 @@ turkish.ObsRunning=OBS Studio çalışıyor. Tamamen kapatıp Yeniden Dene'ye ba
 [Messages]
 english.FinishedLabelNoIcons=[name] is installed.%n%nStart OBS Studio, then open the dock from the Docks menu.
 turkish.FinishedLabelNoIcons=[name] kuruldu.%n%nOBS Studio'yu başlatın, ardından Docks menüsünden paneli açın.
+
+[InstallDelete]
+; 0.1.0 shipped to a directory OBS never reads on Windows. Take it back out.
+Type: filesandordirs; Name: "{userappdata}\obs-studio\plugins\{#PluginId}"
 
 [Files]
 Source: "{#PackageDir}\{#PluginId}\bin\64bit\*"; DestDir: "{app}\bin\64bit"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
