@@ -30,12 +30,14 @@ from the StreamRove dashboard if the machine changes hands.
 Downloads are on the [releases page](https://github.com/StreamRove/obs-streamrove/releases).
 Quit OBS before installing.
 
-**Windows.** Run `obs-streamrove-<version>-windows-x64-Installer.exe`. It installs
-into your own OBS plugin folder, so Windows does not ask for an administrator
-password, and it appears in *Settings → Apps* for removal. The installer is not
-code signed yet, so SmartScreen shows a warning on first run: choose *More info*,
-then *Run anyway*. Prefer to place the files yourself? Take the `.zip` instead and
-extract the `obs-streamrove` folder into `%APPDATA%\obs-studio\plugins\`.
+**Windows.** Run `obs-streamrove-<version>-windows-x64-Installer.exe`. Windows asks
+for an administrator password, because OBS reads plugins from a machine-wide
+directory rather than your own profile. It appears in *Settings → Apps* for
+removal. The installer is not code signed yet, so SmartScreen shows a warning on
+first run: choose *More info*, then *Run anyway*. Prefer to place the files
+yourself? Take the `.zip` instead and extract the `obs-streamrove` folder into
+`C:\ProgramData\obs-studio\plugins\`. Note that this is *not* `%APPDATA%`: on
+Windows, unlike macOS and Linux, OBS does not look in the user profile at all.
 
 **macOS.** Open `obs-streamrove-<version>-macos-universal.pkg`. It is not notarized
 yet, so Gatekeeper blocks a double click: right-click the file, choose *Open*, then
