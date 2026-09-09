@@ -11,7 +11,8 @@ OBS sends **one** stream. StreamRove sends it to every connected channel.
 
 | Control | Effect |
 |---|---|
-| Server / API key / **Connect** | Signs in with a StreamRove developer key (`mux_…`). Create one under *Account settings → API keys*. The key authenticates as you, so the dock sees exactly the streams your dashboard shows. |
+| **Sign in** | Opens StreamRove in your browser and shows an eight-character code. Approve that code while signed in and the dock receives its own key. Nothing is typed into OBS and nothing is copied out of the dashboard. |
+| *Use an API key instead* | The escape hatch, for a self-hosted server or a machine with no browser: paste a developer key (`mux_…`) from *Account settings → API keys*. |
 | Stream picker | Lists the streams of your active workspace. The choice is remembered. |
 | **Use this stream in OBS** | Sets OBS's stream output to *Custom* with the stream's RTMPS ingest and key — the same thing Settings → Stream does, without copying anything by hand. |
 | **Go Live / Stop Streaming** | Starts or stops OBS's stream output. If the ingest was not applied yet, it is applied first. |
@@ -20,10 +21,14 @@ OBS sends **one** stream. StreamRove sends it to every connected channel.
 | Recommended | The platform-derived encoder recommendation from `/streams/{id}/output-profile`. Shown, not applied — OBS's own Settings → Output stays yours. |
 | **Open** | Opens the stream page on StreamRove in your browser. |
 
+Signing in mints a key that belongs to this machine alone, named after it, and
+listed in *Account settings → API keys* — so revoking OBS's access does not
+disturb anything else you have connected. **Sign out** in the dock forgets it
+locally; revoke it on the site to end it everywhere.
+
 Settings live in OBS's plugin config directory (`obs_module_config_path`,
-e.g. `~/.config/obs-studio/plugin_config/obs-streamrove/settings.json`). The API
-key is stored there as typed, the same way OBS stores stream keys; revoke it
-from the StreamRove dashboard if the machine changes hands.
+e.g. `~/.config/obs-studio/plugin_config/obs-streamrove/settings.json`). The key
+is stored there in the clear, the same way OBS stores stream keys.
 
 ## Install
 

@@ -18,7 +18,9 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #include "streamrove-dock.hpp"
 
+#include <initializer_list>
 #include <thread>
+#include <utility>
 
 #include <QComboBox>
 #include <QDesktopServices>
@@ -31,6 +33,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QSysInfo>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -62,6 +65,30 @@ std::string str(obs_data_t *data, const char *key)
 obs_data_t *parse(const HttpResult &result)
 {
 	return result.body.empty() ? nullptr : obs_data_create_from_json(result.body.c_str());
+}
+
+/** Build a JSON object body without hand-rolling escaping. */
+std::string jsonObject(std::initializer_list<std::pair<const char *, std::string>> fields)
+{
+	obs_data_t *data = obs_data_create();
+	for (const auto &field : fields) {
+		obs_data_set_string(data, field.first, field.second.c_str());
+	}
+	const char *json = obs_data_get_json(data);
+	std::string out = json ? json : "{}";
+	obs_data_release(data);
+	return out;
+}
+
+/** What the approval screen will show the person about this machine. */
+std::string thisMachine()
+{
+	const QString host = QSysInfo::machineHostName();
+	const QString pretty = QSysInfo::prettyProductName();
+	if (host.isEmpty()) {
+		return pretty.isEmpty() ? "OBS Studio" : ("OBS Studio · " + pretty).toStdString();
+	}
+	return pretty.isEmpty() ? host.toStdString() : (host + " · " + pretty).toStdString();
 }
 
 /**
@@ -106,6 +133,9 @@ Dock::Dock(QWidget *parent) : QWidget(parent), settings_(loadSettings()), livene
 	pollTimer_->setInterval(kPollIntervalMs);
 	QObject::connect(pollTimer_, &QTimer::timeout, this, &Dock::poll);
 
+	linkTimer_ = new QTimer(this);
+	QObject::connect(linkTimer_, &QTimer::timeout, this, &Dock::pollLinking);
+
 	updateButtons();
 	if (!settings_.apiKey.empty()) {
 		connectClicked();
@@ -120,6 +150,7 @@ Dock::~Dock()
 void Dock::shutdown()
 {
 	pollTimer_->stop();
+	linkTimer_->stop();
 	api_.reset();
 	const std::lock_guard<std::mutex> lock(liveness_->mutex);
 	liveness_->alive = false;
@@ -140,10 +171,29 @@ void Dock::buildUi()
 	serverEdit_->setPlaceholderText("https://streamrove.com");
 	form->addRow(text("StreamRove.ServerUrl"), serverEdit_);
 
-	keyEdit_ = new QLineEdit(QString::fromStdString(settings_.apiKey), account);
+	// Signing in is the way in; the key field is the escape hatch behind it,
+	// for a self-hosted server or a machine that cannot open a browser.
+	keyRow_ = new QWidget(account);
+	auto *keyLayout = new QHBoxLayout(keyRow_);
+	keyLayout->setContentsMargins(0, 0, 0, 0);
+	keyEdit_ = new QLineEdit(QString::fromStdString(settings_.apiKey), keyRow_);
 	keyEdit_->setEchoMode(QLineEdit::Password);
 	keyEdit_->setPlaceholderText("mux_…");
-	form->addRow(text("StreamRove.ApiKey"), keyEdit_);
+	keyLayout->addWidget(new QLabel(text("StreamRove.ApiKey"), keyRow_));
+	keyLayout->addWidget(keyEdit_, 1);
+	// Hidden even when a key is stored: after signing in there is always one,
+	// and putting it back on screen every launch is how a credential ends up
+	// somewhere it should not be. The toggle reveals it on request.
+	keyRow_->setVisible(false);
+	form->addRow(keyRow_);
+
+	codeLabel_ = new QLabel(account);
+	codeLabel_->setWordWrap(true);
+	codeLabel_->setTextFormat(Qt::RichText);
+	codeLabel_->setOpenExternalLinks(true);
+	codeLabel_->setTextInteractionFlags(Qt::TextBrowserInteraction);
+	codeLabel_->setVisible(false);
+	form->addRow(codeLabel_);
 
 	hintLabel_ = new QLabel(account);
 	hintLabel_->setWordWrap(true);
@@ -152,16 +202,32 @@ void Dock::buildUi()
 	form->addRow(hintLabel_);
 
 	auto *connectRow = new QHBoxLayout();
-	connectBtn_ = new QPushButton(text("StreamRove.Connect"), account);
+	connectBtn_ = new QPushButton(text("StreamRove.SignIn"), account);
 	connectBtn_->setDefault(true);
+	cancelLinkBtn_ = new QPushButton(text("StreamRove.Linking.Cancel"), account);
+	cancelLinkBtn_->setVisible(false);
 	statusLabel_ = new QLabel(text("StreamRove.Status.Disconnected"), account);
 	statusLabel_->setWordWrap(true);
 	connectRow->addWidget(connectBtn_);
+	connectRow->addWidget(cancelLinkBtn_);
 	connectRow->addWidget(statusLabel_, 1);
 	form->addRow(connectRow);
 
+	keyToggleBtn_ = new QPushButton(text("StreamRove.UseKey"), account);
+	keyToggleBtn_->setFlat(true);
+	keyToggleBtn_->setCursor(Qt::PointingHandCursor);
+	form->addRow(keyToggleBtn_);
+
 	QObject::connect(connectBtn_, &QPushButton::clicked, this, &Dock::connectClicked);
+	QObject::connect(cancelLinkBtn_, &QPushButton::clicked, this, &Dock::cancelLinking);
 	QObject::connect(keyEdit_, &QLineEdit::returnPressed, this, &Dock::connectClicked);
+	QObject::connect(keyToggleBtn_, &QPushButton::clicked, this, [this]() {
+		keyRow_->setVisible(!keyRow_->isVisible());
+		if (keyRow_->isVisible()) {
+			keyEdit_->setFocus();
+		}
+		updateButtons();
+	});
 	root->addWidget(account);
 
 	// --- Stream ----------------------------------------------------------
@@ -222,9 +288,21 @@ void Dock::updateButtons()
 	const bool haveStream = connected_ && !current_.id.empty();
 	const bool streaming = obs_frontend_streaming_active();
 
-	serverEdit_->setEnabled(!connected_);
-	keyEdit_->setEnabled(!connected_);
-	connectBtn_->setText(text(connected_ ? "StreamRove.Disconnect" : "StreamRove.Connect"));
+	const bool linking = !deviceCode_.empty();
+
+	serverEdit_->setEnabled(!connected_ && !linking);
+	keyEdit_->setEnabled(!connected_ && !linking);
+	keyToggleBtn_->setVisible(!connected_ && !linking);
+	cancelLinkBtn_->setVisible(linking);
+	connectBtn_->setVisible(!linking);
+	if (connected_) {
+		connectBtn_->setText(text("StreamRove.SignOut"));
+	} else {
+		// The button does what the panel is showing: a typed key connects with
+		// that key, an empty field starts a device link.
+		const bool haveTypedKey = keyRow_->isVisible() && !keyEdit_->text().trimmed().isEmpty();
+		connectBtn_->setText(text(haveTypedKey ? "StreamRove.Connect" : "StreamRove.SignIn"));
+	}
 
 	const QString site = QString::fromStdString(ApiClient::normalizeBaseUrl(serverEdit_->text().toStdString()));
 	hintLabel_->setText(text("StreamRove.ApiKey.Hint").arg(site + "/home"));
@@ -274,7 +352,9 @@ void Dock::connectClicked()
 	settings_.apiKey = keyEdit_->text().trimmed().toStdString();
 	serverEdit_->setText(QString::fromStdString(settings_.baseUrl));
 	if (settings_.apiKey.empty()) {
-		setStatus(text("StreamRove.Status.KeyMissing"), true);
+		// Nothing to connect with, so go and get something. This is the path
+		// almost everyone takes; the key field is hidden until asked for.
+		startLinking();
 		return;
 	}
 	saveSettings(settings_);
@@ -330,8 +410,151 @@ void Dock::disconnectFromApi()
 	destinationsTitle_->clear();
 	healthLabel_->clear();
 	recommendedLabel_->clear();
+	settings_.apiKey.clear();
+	saveSettings(settings_);
+	{
+		const QSignalBlocker block(keyEdit_);
+		keyEdit_->clear();
+	}
 	setStatus(text("StreamRove.Status.Disconnected"));
 	updateButtons();
+}
+
+// --- device linking ----------------------------------------------------------
+
+void Dock::startLinking()
+{
+	settings_.baseUrl = ApiClient::normalizeBaseUrl(serverEdit_->text().toStdString());
+	serverEdit_->setText(QString::fromStdString(settings_.baseUrl));
+	saveSettings(settings_);
+
+	// No key yet — that is the point of the exchange.
+	auto api = std::make_shared<ApiClient>(settings_.baseUrl);
+	const std::string body = jsonObject({{"clientName", thisMachine()}});
+
+	connectBtn_->setEnabled(false);
+	setStatus(text("StreamRove.Linking.Starting"));
+
+	runAsync([api, body]() { return api->post("/device/start", body); },
+		 [this](const HttpResult &result) {
+			 connectBtn_->setEnabled(true);
+			 if (!result.ok()) {
+				 setStatus(
+					 text("StreamRove.Status.Error").arg(QString::fromStdString(result.describe())),
+					 true);
+				 return;
+			 }
+			 obs_data_t *data = parse(result);
+			 if (!data) {
+				 setStatus(text("StreamRove.Linking.Failed"), true);
+				 return;
+			 }
+			 deviceCode_ = str(data, "deviceCode");
+			 userCode_ = str(data, "userCode");
+			 verificationUrl_ = str(data, "verificationUrlComplete");
+			 const long long interval = obs_data_get_int(data, "interval");
+			 obs_data_release(data);
+
+			 if (deviceCode_.empty() || userCode_.empty()) {
+				 setStatus(text("StreamRove.Linking.Failed"), true);
+				 return;
+			 }
+
+			 // The server says how often it wants to be asked; it also rate
+			 // limits, so guessing faster only earns refusals.
+			 linkTimer_->setInterval(static_cast<int>((interval > 0 ? interval : 5) * 1000));
+			 linkTimer_->start();
+			 setLinkingUi(true);
+			 openVerificationPage();
+		 });
+}
+
+void Dock::setLinkingUi(bool linking)
+{
+	codeLabel_->setVisible(linking);
+	if (linking) {
+		codeLabel_->setText(text("StreamRove.Linking.Code")
+					    .arg(QString::fromStdString(userCode_).toHtmlEscaped(),
+						 QString::fromStdString(verificationUrl_).toHtmlEscaped()));
+		setStatus(text("StreamRove.Linking.Waiting"));
+	}
+	updateButtons();
+}
+
+void Dock::openVerificationPage()
+{
+	if (!verificationUrl_.empty()) {
+		QDesktopServices::openUrl(QUrl(QString::fromStdString(verificationUrl_)));
+	}
+}
+
+void Dock::pollLinking()
+{
+	if (deviceCode_.empty()) {
+		linkTimer_->stop();
+		return;
+	}
+	auto api = std::make_shared<ApiClient>(settings_.baseUrl);
+	const std::string body = jsonObject({{"deviceCode", deviceCode_}});
+	const std::string inFlightFor = deviceCode_;
+
+	runAsync([api, body]() { return api->post("/device/poll", body); },
+		 [this, inFlightFor](const HttpResult &result) {
+			 // Cancelled, or a second exchange started while this was away.
+			 if (inFlightFor != deviceCode_) {
+				 return;
+			 }
+			 // A refused or dropped poll says nothing about the approval; the
+			 // timer will ask again.
+			 if (!result.ok()) {
+				 return;
+			 }
+			 obs_data_t *data = parse(result);
+			 if (!data) {
+				 return;
+			 }
+			 const std::string status = str(data, "status");
+			 const std::string apiKey = str(data, "apiKey");
+			 obs_data_release(data);
+
+			 if (status == "approved" && !apiKey.empty()) {
+				 finishLinking(apiKey);
+			 } else if (status == "denied") {
+				 cancelLinking();
+				 setStatus(text("StreamRove.Linking.Denied"), true);
+			 } else if (status == "expired" || status == "unknown") {
+				 cancelLinking();
+				 setStatus(text("StreamRove.Linking.Expired"), true);
+			 }
+		 });
+}
+
+void Dock::cancelLinking()
+{
+	linkTimer_->stop();
+	deviceCode_.clear();
+	userCode_.clear();
+	verificationUrl_.clear();
+	codeLabel_->setVisible(false);
+	setStatus(text("StreamRove.Status.Disconnected"));
+	updateButtons();
+}
+
+void Dock::finishLinking(const std::string &apiKey)
+{
+	linkTimer_->stop();
+	deviceCode_.clear();
+	userCode_.clear();
+	verificationUrl_.clear();
+	codeLabel_->setVisible(false);
+
+	{
+		const QSignalBlocker block(keyEdit_);
+		keyEdit_->setText(QString::fromStdString(apiKey));
+	}
+	obs_log(LOG_INFO, "device link approved; signing in");
+	// connectClicked reads the field, saves, and does the /auth/me round trip.
+	connectClicked();
 }
 
 // --- streams -----------------------------------------------------------------

@@ -45,10 +45,15 @@ struct HttpResult {
  * The API key is a StreamRove developer key ("mux_…"), sent as a Bearer token.
  * It authenticates as the person who created it, so the plugin sees exactly
  * the streams that person sees in the dashboard.
+ *
+ * The key may be empty. That is not a degraded state: the device-link routes
+ * are reached before one exists, and a client with no key simply sends no
+ * Authorization header rather than an empty one the server would have to
+ * reject.
  */
 class ApiClient {
 public:
-	ApiClient(std::string baseUrl, std::string apiKey);
+	explicit ApiClient(std::string baseUrl, std::string apiKey = "");
 
 	HttpResult get(const std::string &path) const;
 	HttpResult post(const std::string &path, const std::string &jsonBody) const;
