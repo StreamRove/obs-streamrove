@@ -97,6 +97,19 @@ private:
 
 	void connectClicked();
 	void disconnectFromApi();
+
+	/**
+	 * Device linking: ask the server for a pair of codes, send the person to
+	 * the site with one of them, and poll with the other until a key comes
+	 * back. See DeviceAuth on the server for why it is shaped this way.
+	 */
+	void startLinking();
+	void pollLinking();
+	void cancelLinking();
+	void finishLinking(const std::string &apiKey);
+	void setLinkingUi(bool linking);
+	void openVerificationPage();
+
 	void loadStreams();
 	void streamChosen(int index);
 	void loadDetail();
@@ -130,11 +143,22 @@ private:
 	bool applied_ = false;
 	StreamDetail current_;
 
+	/** Set while a device link is in flight; empty otherwise. */
+	std::string deviceCode_;
+	std::string userCode_;
+	std::string verificationUrl_;
+
 	QLineEdit *serverEdit_ = nullptr;
 	QLineEdit *keyEdit_ = nullptr;
+	QWidget *keyRow_ = nullptr;
 	QPushButton *connectBtn_ = nullptr;
+	QPushButton *keyToggleBtn_ = nullptr;
+	QPushButton *cancelLinkBtn_ = nullptr;
 	QLabel *statusLabel_ = nullptr;
 	QLabel *hintLabel_ = nullptr;
+	QLabel *codeLabel_ = nullptr;
+
+	QTimer *linkTimer_ = nullptr;
 
 	QGroupBox *streamGroup_ = nullptr;
 	QComboBox *streamCombo_ = nullptr;

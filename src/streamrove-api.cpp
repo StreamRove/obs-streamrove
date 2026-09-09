@@ -138,11 +138,13 @@ HttpResult ApiClient::request(const char *method, const std::string &path, const
 	}
 
 	const std::string url = baseUrl_ + "/api" + path;
-	const std::string auth = "Authorization: Bearer " + apiKey_;
 	const std::string userAgent = std::string("obs-streamrove/") + PLUGIN_VERSION;
 
 	struct curl_slist *headers = nullptr;
-	headers = curl_slist_append(headers, auth.c_str());
+	if (!apiKey_.empty()) {
+		const std::string auth = "Authorization: Bearer " + apiKey_;
+		headers = curl_slist_append(headers, auth.c_str());
+	}
 	headers = curl_slist_append(headers, "Accept: application/json");
 	headers = curl_slist_append(headers, "Content-Type: application/json");
 
