@@ -38,7 +38,7 @@
     },
     "name": "obs-streamrove",
     "displayName": "StreamRove for OBS",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "author": "StreamRove",
     "website": "https://streamrove.com",
     "email": "support@streamrove.com"
