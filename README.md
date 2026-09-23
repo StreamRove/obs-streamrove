@@ -52,8 +52,8 @@ installer, take the `.zip`, and place the two pieces by hand:
 
 **macOS.** Open `obs-streamrove-<version>-macos-universal.pkg`. It is not notarized
 yet, so Gatekeeper blocks a double click: right-click the file, choose *Open*, then
-*Open* again. The `.tar.xz` is the manual route, with `obs-streamrove.plugin` going
-into `~/Library/Application Support/obs-studio/plugins/`.
+*Open* again. To place it by hand instead, build from source (below) and copy
+`obs-streamrove.plugin` into `~/Library/Application Support/obs-studio/plugins/`.
 
 **Linux.** Install the `.deb`, or use the build instructions below.
 
@@ -61,7 +61,9 @@ Start OBS afterwards and open the dock from the *Docks* menu.
 
 ## Requirements
 
-* OBS Studio **30.0 or newer** (uses `obs_frontend_add_dock_by_id`).
+* OBS Studio **31.1 or newer** for the released packages: they are built against
+  OBS 31.1.1 and the Qt 6.8 it ships. Building from source against OBS 30.x works —
+  the only frontend call the dock needs, `obs_frontend_add_dock_by_id`, arrived in 30.0.
 * Windows x64, macOS (universal), or Linux x86_64.
 * Network access to your StreamRove server over HTTPS.
 
