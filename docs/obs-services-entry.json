@@ -4,8 +4,8 @@
     "stream_key_link": "https://streamrove.com/home",
     "servers": [
         {
-            "name": "Global (anycast)",
-            "url": "rtmps://live.cloudflare.com:443/live/"
+            "name": "Global",
+            "url": "rtmps://ingest.streamrove.com:443/live/"
         }
     ],
     "recommended": {
@@ -15,5 +15,8 @@
     },
     "supported video codecs": [
         "h264"
+    ],
+    "supported audio codecs": [
+        "aac"
     ]
 }
