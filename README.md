@@ -23,7 +23,11 @@ OBS sends **one** stream. StreamRove sends it to every connected channel.
 
 Signing in mints a key that belongs to this machine alone, named after it, and
 listed in *Account settings → API keys* — so revoking OBS's access does not
-disturb anything else you have connected. **Sign out** in the dock forgets it
+disturb anything else you have connected. That key can do only what the dock
+does: read your streams, their health and recommended settings, and switch
+destinations on or off. The server refuses it everything else, so it cannot
+delete anything, change your account, invite anyone or open billing. A pasted
+developer key has no such limit; it reaches whatever its owner can. **Sign out** in the dock forgets it
 locally; revoke it on the site to end it everywhere.
 
 Settings live in OBS's plugin config directory (`obs_module_config_path`,

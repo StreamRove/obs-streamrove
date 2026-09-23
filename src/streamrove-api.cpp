@@ -47,6 +47,52 @@ struct InFlight {
 	~InFlight() { g_inFlight.fetch_sub(1); }
 };
 
+bool startsWithNoCase(const std::string &s, const char *prefix)
+{
+	for (size_t i = 0; prefix[i] != '\0'; ++i) {
+		if (i >= s.size() || std::tolower(static_cast<unsigned char>(s[i])) != prefix[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/**
+ * Whether an address after "http://" names this machine.
+ *
+ * Deliberately narrow. Userinfo is refused outright, because in
+ * "localhost:80@example.com" the host is example.com; and "127." counts only
+ * as a numeric address, because 127.example.com is somebody's DNS name.
+ */
+bool isLoopback(const std::string &rest)
+{
+	const std::string authority = rest.substr(0, rest.find_first_of("/?#"));
+	if (authority.find('@') != std::string::npos) {
+		return false;
+	}
+	std::string host;
+	if (!authority.empty() && authority.front() == '[') {
+		host = authority.substr(0, authority.find(']') + 1);
+	} else {
+		host = authority.substr(0, authority.find(':'));
+	}
+	for (char &c : host) {
+		c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+	}
+	if (host == "localhost" || host == "[::1]") {
+		return true;
+	}
+	if (host.rfind("127.", 0) != 0) {
+		return false;
+	}
+	for (char c : host) {
+		if (c != '.' && !std::isdigit(static_cast<unsigned char>(c))) {
+			return false;
+		}
+	}
+	return true;
+}
+
 } // namespace
 
 int ApiClient::inFlight()
@@ -74,7 +120,7 @@ std::string HttpResult::describe() const
 	case 401:
 		return "The API key was not accepted.";
 	case 403:
-		return "This key's account cannot access that.";
+		return "This key is not allowed to do that.";
 	case 404:
 		return "Not found.";
 	default:
@@ -99,7 +145,16 @@ std::string ApiClient::normalizeBaseUrl(std::string url)
 	if (url.empty()) {
 		url = "https://streamrove.com";
 	}
-	if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) {
+	// The key rides in a header on every call, so a server typed as http://
+	// used to receive it in the clear before any redirect could help — and
+	// redirects are not followed anyway. Plain http is kept only for a server
+	// on this machine, which is a developer's; anything else is upgraded.
+	if (startsWithNoCase(url, "https://")) {
+		url = "https://" + url.substr(8);
+	} else if (startsWithNoCase(url, "http://")) {
+		const std::string rest = url.substr(7);
+		url = (isLoopback(rest) ? "http://" : "https://") + rest;
+	} else {
 		url = "https://" + url;
 	}
 	return url;

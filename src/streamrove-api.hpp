@@ -44,7 +44,10 @@ struct HttpResult {
  *
  * The API key is a StreamRove developer key ("mux_…"), sent as a Bearer token.
  * It authenticates as the person who created it, so the plugin sees exactly
- * the streams that person sees in the dashboard.
+ * the streams that person sees in the dashboard. A key from signing in through
+ * the browser reaches only the calls this dock makes — the server refuses it
+ * everything else — so a new call here needs the server's list updated too
+ * (Scopes::CLIENTS in the StreamRove API). A pasted key has no such limit.
  *
  * The key may be empty. That is not a degraded state: the device-link routes
  * are reached before one exists, and a client with no key simply sends no
@@ -62,7 +65,10 @@ public:
 	/** Site origin without a trailing slash or "/api" suffix. */
 	const std::string &baseUrl() const { return baseUrl_; }
 
-	/** "streamrove.com/", "https://streamrove.com/api" → "https://streamrove.com". */
+	/**
+	 * "streamrove.com/", "https://streamrove.com/api" → "https://streamrove.com".
+	 * http:// is upgraded to https:// unless the host is this machine.
+	 */
 	static std::string normalizeBaseUrl(std::string url);
 
 	/** Requests executing right now on any worker thread, across all clients. */
