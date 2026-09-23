@@ -28,7 +28,9 @@ namespace streamrove {
  * Stored as JSON in the plugin's own config directory (obs_module_config_path),
  * next to OBS's other per-user settings. The API key is stored as typed: OBS
  * keeps stream keys the same way, and a key the user can revoke from the
- * StreamRove dashboard is the right shape of secret for a desktop plugin.
+ * StreamRove dashboard is the right shape of secret for a desktop plugin. A
+ * key from browser sign-in can also do no more than this dock does, so a copy
+ * of this file cannot delete, invite or change the account.
  */
 struct Settings {
 	std::string baseUrl = "https://streamrove.com";
