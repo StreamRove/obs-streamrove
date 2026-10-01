@@ -1,5 +1,5 @@
 # StreamRove for OBS
-
+[multi-streaming](https://streamrove.com/)
 An OBS Studio dock that signs in to your StreamRove account, lets you pick a
 stream, points OBS at that stream's ingest and shows what StreamRove is doing
 with it: the destinations it fans out to, live health, and the encoder settings
